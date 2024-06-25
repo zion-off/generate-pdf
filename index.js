@@ -100,7 +100,7 @@ app.get("/generate-pdf", async (req, res) => {
       format: "A4",
       printBackground: true,
       margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    });
+    }, { timeout: 0 });
     console.log("PDF generated");
 
     res.set({
