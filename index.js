@@ -10,6 +10,7 @@ const EXTENSION_ID = "lkbebcjgcmobigpeffafkodonchffocl";
 const TIMEOUT_DURATION = 100000;
 
 let browser;
+let page;
 
 async function initializeBrowser() {
   try {
@@ -33,8 +34,10 @@ async function initializeBrowser() {
     });
     console.log("Browser launched successfully");
 
+    // Create a single page
+    page = await browser.newPage();
+
     // Configure extension
-    const page = await browser.newPage();
     console.log("Configuring extension...");
     const optionsPageUrl = `chrome-extension://${EXTENSION_ID}/options/options.html`;
     await page.goto(optionsPageUrl, { waitUntil: "networkidle2", timeout: TIMEOUT_DURATION });
@@ -45,7 +48,6 @@ async function initializeBrowser() {
     await page.click("#optin-enable");
     await new Promise((resolve) => setTimeout(resolve, 1000));
     console.log("Extension configured");
-    await page.close();
   } catch (error) {
     console.error("Error initializing browser:", error);
     throw error;
@@ -58,9 +60,7 @@ app.get("/generate-pdf", async (req, res) => {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
-  let page;
   try {
-    page = await browser.newPage();
     console.log(`Navigating to ${url}...`);
     const targetUrl = decodeURIComponent(url);
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -82,10 +82,6 @@ app.get("/generate-pdf", async (req, res) => {
   } catch (error) {
     console.error("Error generating PDF:", error);
     res.status(500).json({ error: "Error generating PDF", message: error.message });
-  } finally {
-    if (page) {
-      await page.close();
-    }
   }
 });
 
