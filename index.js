@@ -30,6 +30,7 @@ async function getBrowser() {
         process.env.NODE_ENV == "production"
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
+      timeout: 0,
     });
 
     console.log("Browser launched successfully");
