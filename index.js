@@ -1,7 +1,8 @@
 const express = require("express");
 const path = require("path");
 const puppeteer = require("puppeteer");
-const cors = require('cors'); 
+const cors = require("cors");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -18,9 +19,17 @@ async function getBrowser() {
     console.log("Launching puppeteer...");
     browser = await puppeteer.launch({
       args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--single-process",
+        "--no-zygote",
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
+      executablePath:
+        process.env.NODE_ENV == "production"
+          ? process.env.PUPPETEER_EXECUTABLE_PATH
+          : puppeteer.executablePath(),
     });
 
     console.log("Browser launched successfully");
