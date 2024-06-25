@@ -71,7 +71,7 @@ app.get("/generate-pdf", async (req, res) => {
       timeoutPromise,
     ]);
     await Promise.race([page.click("#save_top"), timeoutPromise]);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const optInUrl = `chrome-extension://${EXTENSION_ID}/options/optin/opt-in.html`;
     await Promise.race([
@@ -79,13 +79,13 @@ app.get("/generate-pdf", async (req, res) => {
       timeoutPromise,
     ]);
     await Promise.race([page.click("#optin-enable"), timeoutPromise]);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     console.log("Extension configured");
 
     console.log(`Navigating to ${url}...`);
     const targetUrl = decodeURIComponent(url);
     await Promise.race([
-      page.goto(targetUrl, { waitUntil: "networkidle2" }),
+      page.goto(targetUrl, {timeout: 0}),
       timeoutPromise,
     ]);
     console.log("Navigation complete");
