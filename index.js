@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8000;
 
 const EXTENSION_PATH = path.resolve("./", "extension");
 const EXTENSION_ID = "lkbebcjgcmobigpeffafkodonchffocl";
-const TIMEOUT_DURATION = 30000;
+const TIMEOUT_DURATION = 300000;
 
 app.use(cors());
 
