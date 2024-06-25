@@ -84,21 +84,23 @@ app.get("/generate-pdf", async (req, res) => {
 
     console.log(`Navigating to ${url}...`);
     const targetUrl = decodeURIComponent(url);
-    await Promise.race([
-      page.goto(targetUrl, {timeout: 0}),
-      timeoutPromise,
-    ]);
+    await Promise.race([page.goto(targetUrl, { timeout: 0 }), timeoutPromise]);
     console.log("Navigation complete");
 
     console.log("Generating PDF...");
-    const pdfBuffer = await Promise.race([
-      page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-      }),
-      timeoutPromise,
-    ]);
+    // const pdfBuffer = await Promise.race([
+    //   page.pdf({
+    //     format: "A4",
+    //     printBackground: true,
+    //     margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    //   }),
+    //   timeoutPromise,
+    // ]);
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    });
     console.log("PDF generated");
 
     res.set({
