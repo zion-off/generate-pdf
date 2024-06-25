@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8000;
 
 const EXTENSION_PATH = path.resolve("./", "extension");
 const EXTENSION_ID = "lkbebcjgcmobigpeffafkodonchffocl";
-const TIMEOUT_DURATION = 300000;
+const TIMEOUT_DURATION = 100000;
 
 app.use(cors());
 
@@ -30,7 +30,7 @@ async function getBrowser() {
         process.env.NODE_ENV == "production"
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
-      timeout: 0,
+      timeout: 100000,
     });
 
     console.log("Browser launched successfully");
@@ -88,20 +88,20 @@ app.get("/generate-pdf", async (req, res) => {
     console.log("Navigation complete");
 
     console.log("Generating PDF...");
-    // const pdfBuffer = await Promise.race([
-    //   page.pdf({
-    //     format: "A4",
-    //     printBackground: true,
-    //     margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    //   }),
-    //   timeoutPromise,
-    // ]);
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    }, { timeout: 0 });
-    console.log("PDF generated");
+    const pdfBuffer = await Promise.race([
+      page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+      }),
+      timeoutPromise,
+    ]);
+    // const pdfBuffer = await page.pdf({
+    //   format: "A4",
+    //   printBackground: true,
+    //   margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    // }, { timeout: 0 });
+    // console.log("PDF generated");
 
     res.set({
       "Content-Type": "application/pdf",
