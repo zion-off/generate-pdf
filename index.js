@@ -1,7 +1,6 @@
 const express = require("express");
 const path = require("path");
 const puppeteer = require("puppeteer");
-const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
@@ -11,27 +10,29 @@ const EXTENSION_PATH = path.resolve("./", "extension");
 const EXTENSION_ID = "lkbebcjgcmobigpeffafkodonchffocl";
 const TIMEOUT_DURATION = 180000;
 
-app.use(cors());
+let browser;
+let page;
+const queue = [];
+let isProcessing = false;
 
-async function getBrowser() {
-  let browser;
+async function initializeBrowser() {
   try {
     console.log("Launching puppeteer...");
     browser = await puppeteer.launch({
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-infobars',
-        '--single-process',
-        '--no-zygote',
-        '--no-first-run',
-        '--window-position=0,0',
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-skip-list',
-        '--disable-dev-shm-usage',
-        '--hide-scrollbars',
-        '--disable-notifications',
-        '--force-color-profile=srgb',
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-infobars",
+        "--single-process",
+        "--no-zygote",
+        "--no-first-run",
+        "--window-position=0,0",
+        "--ignore-certificate-errors",
+        "--ignore-certificate-errors-skip-list",
+        "--disable-dev-shm-usage",
+        "--hide-scrollbars",
+        "--disable-notifications",
+        "--force-color-profile=srgb",
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
@@ -43,10 +44,106 @@ async function getBrowser() {
     });
 
     console.log("Browser launched successfully");
-    return browser;
+    page = await browser.newPage();
+    console.log("New page created");
+
+    await configureExtension();
+
+    return { browser, page };
   } catch (error) {
     console.error("Error launching browser:", error);
     throw error;
+  }
+}
+
+async function configureExtension() {
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Operation timed out")), TIMEOUT_DURATION)
+  );
+
+  console.log("Configuring extension...");
+  const optionsPageUrl = `chrome-extension://${EXTENSION_ID}/options/options.html`;
+  await Promise.race([
+    page.goto(optionsPageUrl, { waitUntil: "networkidle2" }),
+    timeoutPromise,
+  ]);
+  await Promise.race([page.click("#save_top"), timeoutPromise]);
+
+  const optInUrl = `chrome-extension://${EXTENSION_ID}/options/optin/opt-in.html`;
+  await Promise.race([
+    page.goto(optInUrl, { waitUntil: "networkidle2" }),
+    timeoutPromise,
+  ]);
+  await Promise.race([page.click("#optin-enable"), timeoutPromise]);
+  console.log("Extension configured");
+}
+
+async function generatePDF(url) {
+  console.log(`Navigating to ${url}...`);
+  const targetUrl = decodeURIComponent(url);
+  // await Promise.race([
+  //   page.goto(targetUrl, { waitUntil: "networkidle2" }),
+  //   timeoutPromise,
+  // ]);
+  const navigationPromise = page.goto(targetUrl, {
+    waitUntil: "networkidle2",
+    timeout: TIMEOUT_DURATION, 
+  });
+
+  try {
+    await navigationPromise;
+    console.log("Navigation completed with networkidle2");
+  } catch (error) {
+    if (error.name === "TimeoutError") {
+      console.log(
+        "Navigation timed out after 60 seconds, but continuing anyway"
+      );
+    } else {
+      throw error; // Re-throw if it's not a timeout error
+    }
+  }
+  console.log("Navigation complete");
+
+  console.log("Generating PDF...");
+  const pdfBuffer = await page.pdf(
+    {
+      format: "A4",
+      printBackground: true,
+      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    },
+    { timeout: 0 }
+  );
+  console.log("PDF generated");
+
+  return pdfBuffer;
+}
+
+async function processQueue() {
+  if (isProcessing || queue.length === 0) return;
+
+  isProcessing = true;
+  const { url, res } = queue.shift();
+
+  try {
+    const start = Date.now();
+    const pdfBuffer = await generatePDF(url);
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'attachment; filename="generated_page.pdf"',
+    });
+
+    res.send(pdfBuffer);
+    const end = Date.now();
+    console.log(`PDF sent, time taken: ${end - start}ms`);
+  } catch (error) {
+    console.error("Error processing request:", error);
+    res
+      .status(500)
+      .json({ error: "Error generating PDF", message: error.message });
+  } finally {
+    isProcessing = false;
+    processQueue();
   }
 }
 
@@ -57,84 +154,24 @@ app.get("/generate-pdf", async (req, res) => {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
-  let browser;
+  queue.push({ url, res });
+  processQueue();
+});
+
+app.listen(PORT, async () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
   try {
-    const start = Date.now();
-    console.log("Launching browser...");
-    browser = await getBrowser();
-    console.log("Browser launched");
-
-    const page = await browser.newPage();
-    console.log("New page created");
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Operation timed out")),
-        TIMEOUT_DURATION
-      )
-    );
-
-    console.log("Configuring extension...");
-    const optionsPageUrl = `chrome-extension://${EXTENSION_ID}/options/options.html`;
-    await Promise.race([
-      page.goto(optionsPageUrl, { waitUntil: "networkidle2" }),
-      timeoutPromise,
-    ]);
-    await Promise.race([page.click("#save_top"), timeoutPromise]);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const optInUrl = `chrome-extension://${EXTENSION_ID}/options/optin/opt-in.html`;
-    await Promise.race([
-      page.goto(optInUrl, { waitUntil: "networkidle2" }),
-      timeoutPromise,
-    ]);
-    await Promise.race([page.click("#optin-enable"), timeoutPromise]);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    console.log("Extension configured");
-
-    console.log(`Navigating to ${url}...`);
-    const targetUrl = decodeURIComponent(url);
-    await Promise.race([page.goto(targetUrl, { timeout: 0 }), timeoutPromise]);
-    console.log("Navigation complete");
-
-    console.log("Generating PDF...");
-    // const pdfBuffer = await Promise.race([
-    //   page.pdf({
-    //     format: "A4",
-    //     printBackground: true,
-    //     margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    //   }),
-    //   timeoutPromise,
-    // ]);
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    }, { timeout: 0 });
-    console.log("PDF generated");
-
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": 'attachment; filename="generated_page.pdf"',
-    });
-
-    res.send(pdfBuffer);
-    console.log("PDF sent");
-    const end = Date.now();
-    console.log(`Time taken: ${end - start}ms`);
-    
+    await initializeBrowser();
+    console.log("Browser and page initialized");
   } catch (error) {
-    console.error("Error generating PDF:", error);
-    res
-      .status(500)
-      .json({ error: "Error generating PDF", message: error.message });
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
+    console.error("Failed to initialize browser:", error);
+    process.exit(1);
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+process.on("SIGINT", async () => {
+  if (browser) {
+    await browser.close();
+  }
+  process.exit();
 });
