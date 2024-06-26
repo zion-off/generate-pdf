@@ -34,7 +34,6 @@ async function initializeBrowser() {
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
       timeout: 100000,
-      headless: false,
     });
 
     console.log("Browser launched successfully");
@@ -47,7 +46,7 @@ async function initializeBrowser() {
       "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1"
     );
     page.setCacheEnabled(false);
-    page.setRequestInterception(true);
+    // page.setRequestInterception(true);
     // page.on("request", (request) => {
     //   if (["image"].includes(request.resourceType())) {
     //     request.abort();
