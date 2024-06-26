@@ -34,13 +34,28 @@ async function initializeBrowser() {
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
       timeout: 100000,
+      headless: false,
     });
 
     console.log("Browser launched successfully");
     page = await browser.newPage();
-    console.log("New page created");
-
     await configureExtension();
+
+    page.setJavaScriptEnabled(false);
+    page.setViewport({ width: 375, height: 667 });
+    page.setUserAgent(
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1"
+    );
+    page.setCacheEnabled(false);
+    page.setRequestInterception(true);
+    // page.on("request", (request) => {
+    //   if (["image"].includes(request.resourceType())) {
+    //     request.abort();
+    //   } else {
+    //     request.continue();
+    //   }
+    // });
+    console.log("New page created");
 
     return { browser, page };
   } catch (error) {
@@ -72,6 +87,9 @@ async function configureExtension() {
 }
 
 async function generatePDF(url) {
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Operation timed out")), TIMEOUT_DURATION)
+  );
   console.log(`Navigating to ${url}...`);
   const targetUrl = decodeURIComponent(url);
   // await Promise.race([
@@ -80,7 +98,7 @@ async function generatePDF(url) {
   // ]);
   const navigationPromise = page.goto(targetUrl, {
     waitUntil: "networkidle2",
-    timeout: TIMEOUT_DURATION,
+    timeout: TIMEOUT_DURATION / 3,
   });
 
   try {
@@ -104,12 +122,18 @@ async function generatePDF(url) {
   console.log("Navigation complete");
 
   console.log("Generating PDF...");
-  const pdfBuffer = await page.pdf({
-    format: "A4",
-    printBackground: true,
-    margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    timeout: 0,
-  });
+
+  let pdfBuffer;
+  await Promise.race([
+    (pdfBuffer = await page.pdf({
+      format: "A4",
+      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+      printBackground: true,
+      timeout: TIMEOUT_DURATION,
+    })),
+    timeoutPromise,
+  ]);
+
   console.log("PDF generated");
 
   return pdfBuffer;
