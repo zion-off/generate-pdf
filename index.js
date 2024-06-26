@@ -145,11 +145,16 @@ async function processQueue() {
   }
 }
 
-app.get("/generate-pdf", async (req, res) => {
-  const { url } = req.query;
+app.get(["/generate-pdf", "/*"], async (req, res) => {
+  let url = req.query.url || req.params[0];
 
   if (!url) {
     return res.status(400).json({ error: "URL parameter is required" });
+  }
+
+  // Ensure the URL has a protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
   }
 
   queue.push({ url, res });
