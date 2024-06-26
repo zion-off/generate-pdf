@@ -19,10 +19,19 @@ async function getBrowser() {
     console.log("Launching puppeteer...");
     browser = await puppeteer.launch({
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--single-process",
-        "--no-zygote",
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-infobars',
+        '--single-process',
+        '--no-zygote',
+        '--no-first-run',
+        '--window-position=0,0',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-skip-list',
+        '--disable-dev-shm-usage',
+        '--hide-scrollbars',
+        '--disable-notifications',
+        '--force-color-profile=srgb',
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
@@ -37,7 +46,7 @@ async function getBrowser() {
     return browser;
   } catch (error) {
     console.error("Error launching browser:", error);
-    throw error; // Propagate the error to handle it in the calling function
+    throw error;
   }
 }
 
@@ -50,6 +59,7 @@ app.get("/generate-pdf", async (req, res) => {
 
   let browser;
   try {
+    const start = Date.now();
     console.log("Launching browser...");
     browser = await getBrowser();
     console.log("Browser launched");
@@ -88,20 +98,20 @@ app.get("/generate-pdf", async (req, res) => {
     console.log("Navigation complete");
 
     console.log("Generating PDF...");
-    const pdfBuffer = await Promise.race([
-      page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-      }),
-      timeoutPromise,
-    ]);
-    // const pdfBuffer = await page.pdf({
-    //   format: "A4",
-    //   printBackground: true,
-    //   margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    // }, { timeout: 0 });
-    // console.log("PDF generated");
+    // const pdfBuffer = await Promise.race([
+    //   page.pdf({
+    //     format: "A4",
+    //     printBackground: true,
+    //     margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    //   }),
+    //   timeoutPromise,
+    // ]);
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    }, { timeout: 0 });
+    console.log("PDF generated");
 
     res.set({
       "Content-Type": "application/pdf",
@@ -109,6 +119,10 @@ app.get("/generate-pdf", async (req, res) => {
     });
 
     res.send(pdfBuffer);
+    console.log("PDF sent");
+    const end = Date.now();
+    console.log(`Time taken: ${end - start}ms`);
+    
   } catch (error) {
     console.error("Error generating PDF:", error);
     res
