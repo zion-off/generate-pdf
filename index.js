@@ -1,9 +1,11 @@
 const express = require("express");
 const path = require("path");
 const puppeteer = require("puppeteer");
+const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 8000;
 
 const EXTENSION_PATH = path.resolve("./", "extension");
@@ -22,17 +24,8 @@ async function initializeBrowser() {
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-infobars",
         "--single-process",
         "--no-zygote",
-        "--no-first-run",
-        "--window-position=0,0",
-        "--ignore-certificate-errors",
-        "--ignore-certificate-errors-skip-list",
-        "--disable-dev-shm-usage",
-        "--hide-scrollbars",
-        "--disable-notifications",
-        "--force-color-profile=srgb",
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
@@ -96,10 +89,16 @@ async function generatePDF(url) {
   } catch (error) {
     if (error.name === "TimeoutError") {
       console.log(
-        `Navigation timed out after ${TIMEOUT_DURATION/1000} seconds, but continuing anyway`
+        `Navigation timed out after ${
+          TIMEOUT_DURATION / 1000
+        } seconds, but continuing anyway`
       );
+    } else if (error.message.includes("Navigating frame was detached")) {
+      await browser.close();
+      await initializeBrowser();
+      throw new Error("Navigating frame was detached, retry later");
     } else {
-      throw error; // Re-throw if it's not a timeout error
+      throw error; // Re-throw if it's not a timeout error or frame detachment
     }
   }
   console.log("Navigation complete");
@@ -145,16 +144,16 @@ async function processQueue() {
   }
 }
 
-app.get(["/generate-pdf", "/*"], async (req, res) => {
-  let url = req.query.url || req.params[0];
+app.get(["/generate-pdf"], async (req, res) => {
+  let url = req.query.url;
 
   if (!url) {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
   // Ensure the URL has a protocol
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    url = 'https://' + url;
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "https://" + url;
   }
 
   queue.push({ url, res });
