@@ -87,7 +87,7 @@ async function generatePDF(url) {
   // ]);
   const navigationPromise = page.goto(targetUrl, {
     waitUntil: "networkidle2",
-    timeout: TIMEOUT_DURATION, 
+    timeout: TIMEOUT_DURATION,
   });
 
   try {
@@ -96,7 +96,7 @@ async function generatePDF(url) {
   } catch (error) {
     if (error.name === "TimeoutError") {
       console.log(
-        "Navigation timed out after 60 seconds, but continuing anyway"
+        `Navigation timed out after ${TIMEOUT_DURATION/1000} seconds, but continuing anyway`
       );
     } else {
       throw error; // Re-throw if it's not a timeout error
@@ -105,14 +105,12 @@ async function generatePDF(url) {
   console.log("Navigation complete");
 
   console.log("Generating PDF...");
-  const pdfBuffer = await page.pdf(
-    {
-      format: "A4",
-      printBackground: true,
-      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    },
-    { timeout: 0 }
-  );
+  const pdfBuffer = await page.pdf({
+    format: "A4",
+    printBackground: true,
+    margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    timeout: 0,
+  });
   console.log("PDF generated");
 
   return pdfBuffer;
