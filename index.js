@@ -113,11 +113,12 @@ async function generatePDF(url) {
   const targetUrl = decodeURIComponent(url);
 
   try {
-    // First, check if the page is still valid
-    if (!page.isClosed()) {
-      await page.reload(); // Reset the page state
-    } else {
-      // If page is closed, create a new one
+    // Try to reuse the existing page
+    try {
+      await page.reload(); // Clear the previous page state
+    } catch (reloadError) {
+      console.log("Could not reload page, creating new one:", reloadError);
+      // Only create new page if reload fails
       page = await browser.newPage();
       await page.setJavaScriptEnabled(false);
       await page.setViewport({ width: 375, height: 667 });
@@ -127,27 +128,17 @@ async function generatePDF(url) {
       await page.setCacheEnabled(false);
     }
 
-    // Navigate with more robust error handling
-    try {
-      await Promise.race([
-        page.goto(targetUrl, {
-          waitUntil: "networkidle2",
-          timeout: TIMEOUT_DURATION / 3,
-        }),
-        timeoutPromise,
-      ]);
-      console.log("Navigation completed with networkidle2");
-    } catch (navigationError) {
-      if (navigationError.message.includes("Navigating frame was detached") ||
-          navigationError.message.includes("detached Frame")) {
-        console.log("Page detached during navigation, attempting recovery...");
-        await initializeBrowser(); // Reinitialize the browser
-        throw new Error("Page detached during navigation, please retry");
-      }
-      throw navigationError;
-    }
+    // Navigate to the target URL
+    await Promise.race([
+      page.goto(targetUrl, {
+        waitUntil: "networkidle2",
+        timeout: TIMEOUT_DURATION / 3,
+      }),
+      timeoutPromise,
+    ]);
+    console.log("Navigation completed");
 
-    // Generate PDF with additional error checking
+    // Generate PDF
     console.log("Generating PDF...");
     const pdfBuffer = await Promise.race([
       page.pdf({
@@ -164,8 +155,9 @@ async function generatePDF(url) {
   } catch (error) {
     console.error("Error in PDF generation:", error);
     if (error.message.includes("detached Frame")) {
-      await initializeBrowser(); // Reinitialize the browser
-      throw new Error("Page detached during PDF generation, please retry");
+      console.log("Page detached, reinitializing browser...");
+      await initializeBrowser();
+      throw new Error("Page detached, please retry");
     }
     throw error;
   }
