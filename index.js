@@ -111,32 +111,45 @@ async function generatePDF(url) {
 
   console.log(`Navigating to ${url}...`);
   const targetUrl = decodeURIComponent(url);
-  const navigationPromise = page.goto(targetUrl, {
-    waitUntil: "networkidle2",
-    timeout: TIMEOUT_DURATION / 3,
-  });
 
   try {
-    await navigationPromise;
-    console.log("Navigation completed with networkidle2");
-  } catch (error) {
-    if (error.name === "TimeoutError") {
-      console.log(
-        `Navigation timed out after ${TIMEOUT_DURATION / 1000} seconds, but continuing anyway`
-      );
-    } else if (error.message.includes("Navigating frame was detached")) {
-      await browser.close();
-      await initializeBrowser();
-      throw new Error("Navigating frame was detached, retry later");
+    // First, check if the page is still valid
+    if (!page.isClosed()) {
+      await page.reload(); // Reset the page state
     } else {
-      throw error;
+      // If page is closed, create a new one
+      page = await browser.newPage();
+      await page.setJavaScriptEnabled(false);
+      await page.setViewport({ width: 375, height: 667 });
+      await page.setUserAgent(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1"
+      );
+      await page.setCacheEnabled(false);
     }
-  }
 
-  console.log("Generating PDF...");
-  let pdfBuffer;
-  try {
-    pdfBuffer = await Promise.race([
+    // Navigate with more robust error handling
+    try {
+      await Promise.race([
+        page.goto(targetUrl, {
+          waitUntil: "networkidle2",
+          timeout: TIMEOUT_DURATION / 3,
+        }),
+        timeoutPromise,
+      ]);
+      console.log("Navigation completed with networkidle2");
+    } catch (navigationError) {
+      if (navigationError.message.includes("Navigating frame was detached") ||
+          navigationError.message.includes("detached Frame")) {
+        console.log("Page detached during navigation, attempting recovery...");
+        await initializeBrowser(); // Reinitialize the browser
+        throw new Error("Page detached during navigation, please retry");
+      }
+      throw navigationError;
+    }
+
+    // Generate PDF with additional error checking
+    console.log("Generating PDF...");
+    const pdfBuffer = await Promise.race([
       page.pdf({
         format: "A4",
         margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
@@ -145,10 +158,15 @@ async function generatePDF(url) {
       }),
       timeoutPromise,
     ]);
-    console.log("PDF generated");
+
+    console.log("PDF generated successfully");
     return pdfBuffer;
   } catch (error) {
-    console.error("Error generating PDF:", error);
+    console.error("Error in PDF generation:", error);
+    if (error.message.includes("detached Frame")) {
+      await initializeBrowser(); // Reinitialize the browser
+      throw new Error("Page detached during PDF generation, please retry");
+    }
     throw error;
   }
 }
