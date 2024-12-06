@@ -2,6 +2,22 @@ const express = require("express");
 const path = require("path");
 const puppeteer = require("puppeteer");
 const cors = require("cors");
+const firebase = require("firebase/app");
+const {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} = require("firebase/storage");
+const firebaseConfig = {
+  apiKey: "AIzaSyDgMoQ5YgQlASidvtqQ4G9eY5l2lIPWciI",
+  authDomain: "essays-b32fd.firebaseapp.com",
+  projectId: "essays-b32fd",
+  storageBucket: "essays-b32fd.appspot.com",
+  messagingSenderId: "366152957639",
+  appId: "1:366152957639:web:7cb1918d4d89a56edd48e2",
+};
+firebase.initializeApp(firebaseConfig);
 require("dotenv").config();
 
 const app = express();
@@ -20,12 +36,12 @@ const queue = [];
 let isProcessing = false;
 
 async function handlePageError(error) {
-  console.error('Page crashed:', error);
+  console.error("Page crashed:", error);
   try {
     await browser.close();
     await initializeBrowser();
   } catch (err) {
-    console.error('Failed to recover from page crash:', err);
+    console.error("Failed to recover from page crash:", err);
   }
 }
 
@@ -53,9 +69,9 @@ async function initializeBrowser() {
       timeout: 100000,
     });
 
-    browser.on('targetcreated', async (target) => {
+    browser.on("targetcreated", async (target) => {
       const newPage = await target.page();
-      if (newPage) newPage.on('error', handlePageError);
+      if (newPage) newPage.on("error", handlePageError);
     });
 
     console.log("Browser launched successfully");
@@ -79,7 +95,10 @@ async function initializeBrowser() {
 
 async function configureExtension() {
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Extension configuration timed out")), TIMEOUT_DURATION)
+    setTimeout(
+      () => reject(new Error("Extension configuration timed out")),
+      TIMEOUT_DURATION
+    )
   );
 
   console.log("Configuring extension...");
@@ -106,7 +125,10 @@ async function configureExtension() {
 
 async function generatePDF(url) {
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("PDF generation timed out")), TIMEOUT_DURATION)
+    setTimeout(
+      () => reject(new Error("PDF generation timed out")),
+      TIMEOUT_DURATION
+    )
   );
 
   console.log(`Navigating to ${url}...`);
@@ -170,17 +192,12 @@ async function processQueue() {
   const { url, res } = queue.shift();
 
   try {
-    const start = Date.now();
     const pdfBuffer = await generatePDF(url);
-
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": 'attachment; filename="generated_page.pdf"',
-    });
-
-    res.send(pdfBuffer);
-    const end = Date.now();
-    console.log(`PDF sent, time taken: ${end - start}ms`);
+    const firebaseLink = await uploadFile(
+      pdfBuffer,
+      `essays/${Date.now()}.pdf`
+    );
+    res.status(200).json({ link: firebaseLink });
   } catch (error) {
     console.error("Error processing request:", error);
     res
@@ -189,6 +206,19 @@ async function processQueue() {
   } finally {
     isProcessing = false;
     processQueue();
+  }
+}
+
+async function uploadFile(fileBuffer, filePath) {
+  try {
+    const storage = getStorage();
+    const storageRef = ref(storage, filePath);
+    const snapshot = await uploadBytes(storageRef, fileBuffer);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  } catch (error) {
+    console.error("Upload failed", error);
+    throw new Error("Upload failed");
   }
 }
 
